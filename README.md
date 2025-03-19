@@ -1,5 +1,4 @@
-Open Farming Hackdays 2025
-==========================
+![](https://fal.media/files/monkey/uH9nlOh09gmBCWsmIhL8w_1afb8d37001a49d0afbdc072aa17fd8d.jpg)
 
 # 🌳 Bäumige Direktzahlungen: Ökologischen Wert belohnen statt Massnahmen vorschreiben
 
