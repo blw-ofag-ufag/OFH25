@@ -45,7 +45,7 @@ Weitere Anmerkungen zur Grösse von Bäumen:
 -	Unterlage, Boden, Schaderreger, Pflege beeinflussen Grösse
 -	Pflege als Einflussfaktor
 
-# Links zu relevanten Datensätzen
+# 🌍 Links zu relevanten Datensätzen
 
 - [Vegetationshöhenmodell LFI](https://opendata.swiss/de/dataset/vegetationshohenmodell-lfi)
 - Feature-Klasse `TLM_EINZELBAUM_GEBUESCH` aus [swissTLM3D](https://www.swisstopo.admin.ch/de/landschaftsmodell-swisstlm3d)
