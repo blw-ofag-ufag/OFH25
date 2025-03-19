@@ -45,3 +45,12 @@ Weitere Anmerkungen zur Grösse von Bäumen:
 
 -	Unterlage, Boden, Schaderreger, Pflege beeinflussen Grösse
 -	Pflege als Einflussfaktor
+
+# Links to interesting datasets
+
+- [Vegetation height model NFI](https://opendata.swiss/en/dataset/vegetationshohenmodell-lfi)
+- Feature Class TLM_EINZELBAUM_GEBUESCH from [swissTLM3D](https://www.swisstopo.admin.ch/de/landschaftsmodell-swisstlm3d)
+- [swissALTI3D](https://www.swisstopo.admin.ch/de/hoehenmodell-swissalti3d)
+- [Landwirtschaftliche Nutzungsflächen Schweiz](https://opendata.swiss/en/dataset/landwirtschaftliche-nutzungsflachen-schweiz)
+- [Hillsides and slopes](https://opendata.swiss/en/dataset/hanglagen)
+- [Boundaries of agricultural zones](https://opendata.swiss/en/dataset/landwirtschaftliche-zonengrenzen-der-schweiz)
