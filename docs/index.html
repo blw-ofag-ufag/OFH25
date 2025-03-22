@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Distance-Based Utility Demo (p5.js with Tooltip)</title>
+  <title>Modified Utility Demo (p5.js with Tooltip)</title>
   <!-- p5.js library -->
   <script src="https://cdn.jsdelivr.net/npm/p5@1.4.2/lib/p5.min.js"></script>
   <style>
@@ -49,10 +49,10 @@
   </style>
 </head>
 <body>
-  <h1>Distance-Based Utility Demo (p5.js)</h1>
+  <h1>Modified Utility Demo (p5.js)</h1>
   <div class="container">
     <div id="canvas-container">
-      <!-- p5.js canvas and tooltip are appended here -->
+      <!-- p5.js canvas and tooltip will be attached here -->
       <div id="tooltip"></div>
     </div>
     <div id="control-panel">
@@ -81,7 +81,7 @@
     const CANVAS_SIZE = 600;      // Canvas size in pixels
     const MODEL_SIZE  = 100;      // Model space: 0 to 100 in both x and y
     const PIXELS_PER_UNIT = CANVAS_SIZE / MODEL_SIZE;
-    const GRID_RESOLUTION = 50;
+    const GRID_RESOLUTION = 100;
     const STEP = MODEL_SIZE / (GRID_RESOLUTION - 1);
 
     // Initial tree points (model coordinates)
@@ -96,33 +96,36 @@
     let tooltipDiv;
 
     // ------------------------------
-    // UTILITY FUNCTIONS
+    // UTILITY FUNCTIONS (Modified)
     // ------------------------------
     // Euclidean distance between two points
     function distance(x1, y1, x2, y2) {
       return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
     }
 
-    // Calculate the utility at a given point based on its distance to the 5 nearest trees
+    // Modified utility: U(p) = 1 - sum(1/dist(p, t_i))
     function pointUtility(px, py, trees) {
-      if (trees.length === 0) return 0;
-      let dists = trees.map(t => distance(px, py, t.x, t.y));
-      dists.sort((a, b) => a - b);
-      let nearest = dists.slice(0, 5);
-      let avg = nearest.reduce((sum, d) => sum + d, 0) / nearest.length;
-      return Math.min(avg, 50);
+      const epsilon = 0.001; // to avoid division by zero
+      let sumInv = 0;
+      trees.forEach(t => {
+        let d = distance(px, py, t.x, t.y);
+        if (d < epsilon) d = epsilon;
+        sumInv += 1 / d;
+      });
+      return 1 - sumInv;
     }
 
-    // Compute utility for a given tree (excluding itself)
+    // Compute a tree's utility (excluding itself)
     function computeTreeUtility(tree, trees) {
-      let dists = trees
-        .filter(t => t !== tree)
-        .map(t => distance(tree.x, tree.y, t.x, t.y));
-      if (dists.length === 0) return 0;
-      dists.sort((a, b) => a - b);
-      let nearest = dists.slice(0, 5);
-      let avg = nearest.reduce((sum, d) => sum + d, 0) / nearest.length;
-      return Math.min(avg, 50);
+      const epsilon = 0.001;
+      let sumInv = 0;
+      trees.forEach(t => {
+        if (t === tree) return;
+        let d = distance(tree.x, tree.y, t.x, t.y);
+        if (d < epsilon) d = epsilon;
+        sumInv += 1 / d;
+      });
+      return 1 - sumInv;
     }
 
     // Sum the utility values for all trees
@@ -148,20 +151,27 @@
       return data;
     }
 
-    // Color scale: transitions from red (low) -> yellow (mid) -> green (high)
-    function getColor(value, maxVal) {
-      let mid = maxVal / 2;
-      let r, g;
-      if (value <= mid) {
-        let ratio = value / mid;
+    // Adjusted color scale:
+    // If utility < 0, return white.
+    // For utility between 0 and 1, interpolate:
+    //   0 -> red, 0.5 -> yellow, 1 -> green.
+    function getColor(value) {
+      if (value < 0) return "rgb(255,255,255)";  // negatives: white
+      // Clamp value to maximum 1
+      if (value > 1) value = 1;
+      let r, g, b = 0;
+      if (value <= 0.5) {
+        // Interpolate from red (255,0,0) to yellow (255,255,0)
+        let ratio = value / 0.5; // 0 to 1
         r = 255;
         g = Math.round(255 * ratio);
       } else {
-        let ratio = (value - mid) / (maxVal - mid);
+        // Interpolate from yellow (255,255,0) to green (0,255,0)
+        let ratio = (value - 0.5) / 0.5; // 0 to 1
         r = Math.round(255 * (1 - ratio));
         g = 255;
       }
-      return `rgb(${r},${g},0)`;
+      return `rgb(${r},${g},${b})`;
     }
 
     // ------------------------------
@@ -194,17 +204,15 @@
       background(255);
       // Compute grid data based on current trees
       let gridData = buildGridData(userPoints);
-      let maxVal = (layer === "utility")
-                    ? Math.max(...gridData.map(d => d.utility))
-                    : Math.max(...gridData.map(d => d.marginalUtility));
-      if (maxVal === 0) maxVal = 1; // prevent division by zero
-
+      // For our new utility, valid values are between 0 and 1.
+      // We'll use this range for the color scale.
       let cellSize = CANVAS_SIZE / (GRID_RESOLUTION - 1);
       noStroke();
       // Draw each grid cell
       gridData.forEach(pt => {
+        // Use the chosen layer: utility or marginal
         let val = (layer === "utility") ? pt.utility : pt.marginalUtility;
-        fill(getColor(val, maxVal));
+        fill(getColor(val));
         let cx = pt.x * PIXELS_PER_UNIT;
         let cy = pt.y * PIXELS_PER_UNIT;
         rect(cx - cellSize / 2, cy - cellSize / 2, cellSize, cellSize);
@@ -220,7 +228,7 @@
         let cy = tree.y * PIXELS_PER_UNIT;
         fill(0);
         ellipse(cx, cy, 10, 10);
-        let tUtil = computeTreeUtility(tree, userPoints).toFixed(1);
+        let tUtil = computeTreeUtility(tree, userPoints).toFixed(2);
         fill(0);
         text(tUtil, cx, cy - 10);
       });
@@ -243,9 +251,9 @@
         tooltipDiv.innerHTML = 
           `x: ${cell.x.toFixed(1)}<br>` +
           `y: ${cell.y.toFixed(1)}<br>` +
-          `Utility: ${cell.utility.toFixed(1)}<br>` +
-          `Marginal: ${cell.marginalUtility.toFixed(1)}`;
-        // Position tooltip directly relative to the container using mouse coordinates with a 2px offset
+          `Utility: ${cell.utility.toFixed(2)}<br>` +
+          `Marginal: ${cell.marginalUtility.toFixed(2)}`;
+        // Position tooltip using p5's mouse coordinates (2px offset)
         tooltipDiv.style.left = (mouseX + 2) + "px";
         tooltipDiv.style.top = (mouseY + 2) + "px";
         tooltipDiv.style.display = "block";
