@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Distance-Based Utility Demo (p5.js with Tooltip)</title>
+  <!-- p5.js library -->
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.4.2/lib/p5.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    /* Flex container: left for canvas, right for controls */
+    .container {
+      display: flex;
+    }
+    /* Left side: canvas container */
+    #canvas-container {
+      flex: 1;
+      position: relative; /* for positioning tooltip */
+    }
+    /* Right side: control panel */
+    #control-panel {
+      width: 250px;
+      margin-left: 20px;
+    }
+    #control-panel div {
+      margin-bottom: 15px;
+    }
+    .outputBox {
+      width: 100%;
+      height: 50px;
+      background-color: #f0f0f0;
+      padding: 5px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    /* Tooltip styling */
+    #tooltip {
+      position: absolute;
+      pointer-events: none;
+      background-color: rgba(255,255,255,0.9);
+      border: 1px solid #ccc;
+      padding: 5px;
+      font-size: 12px;
+      display: none;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <h1>Distance-Based Utility Demo (p5.js)</h1>
+  <div class="container">
+    <div id="canvas-container">
+      <!-- p5.js canvas and tooltip are appended here -->
+      <div id="tooltip"></div>
+    </div>
+    <div id="control-panel">
+      <div>
+        <label>
+          <input type="radio" name="layer" value="utility" checked> Utility
+        </label><br>
+        <label>
+          <input type="radio" name="layer" value="marginal"> Marginal Utility
+        </label>
+      </div>
+      <div>
+        <button id="resetBtn">Reset Points</button>
+      </div>
+      <div>
+        <strong>Total Utility</strong>
+        <div class="outputBox" id="totalUtility">0</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ------------------------------
+    // GLOBAL VARIABLES & CONFIG
+    // ------------------------------
+    const CANVAS_SIZE = 600;      // Canvas size in pixels
+    const MODEL_SIZE  = 100;      // Model space: 0 to 100 in both x and y
+    const PIXELS_PER_UNIT = CANVAS_SIZE / MODEL_SIZE;
+    const GRID_RESOLUTION = 50;
+    const STEP = MODEL_SIZE / (GRID_RESOLUTION - 1);
+
+    // Initial tree points (model coordinates)
+    const initialPoints = [
+      { x: 20, y: 30 },
+      { x: 60, y: 50 },
+      { x: 80, y: 80 }
+    ];
+    let userPoints = initialPoints.map(pt => ({ ...pt })); // clone initial points
+
+    // Tooltip element (for grid info)
+    let tooltipDiv;
+
+    // ------------------------------
+    // UTILITY FUNCTIONS
+    // ------------------------------
+    // Euclidean distance between two points
+    function distance(x1, y1, x2, y2) {
+      return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
+    }
+
+    // Calculate the utility at a given point based on its distance to the 5 nearest trees
+    function pointUtility(px, py, trees) {
+      if (trees.length === 0) return 0;
+      let dists = trees.map(t => distance(px, py, t.x, t.y));
+      dists.sort((a, b) => a - b);
+      let nearest = dists.slice(0, 5);
+      let avg = nearest.reduce((sum, d) => sum + d, 0) / nearest.length;
+      return Math.min(avg, 50);
+    }
+
+    // Compute utility for a given tree (excluding itself)
+    function computeTreeUtility(tree, trees) {
+      let dists = trees
+        .filter(t => t !== tree)
+        .map(t => distance(tree.x, tree.y, t.x, t.y));
+      if (dists.length === 0) return 0;
+      dists.sort((a, b) => a - b);
+      let nearest = dists.slice(0, 5);
+      let avg = nearest.reduce((sum, d) => sum + d, 0) / nearest.length;
+      return Math.min(avg, 50);
+    }
+
+    // Sum the utility values for all trees
+    function computeTotalUtility(trees) {
+      return trees.reduce((sum, t) => sum + computeTreeUtility(t, trees), 0);
+    }
+
+    // Build grid data with both utility and marginal utility values
+    function buildGridData(trees) {
+      let data = [];
+      let baseline = computeTotalUtility(trees);
+      for (let i = 0; i < GRID_RESOLUTION; i++) {
+        for (let j = 0; j < GRID_RESOLUTION; j++) {
+          let x = i * STEP;
+          let y = j * STEP;
+          let utilityVal = pointUtility(x, y, trees);
+          let trialTrees = [...trees, { x, y }];
+          let newTotal = computeTotalUtility(trialTrees);
+          let marginalVal = newTotal - baseline;
+          data.push({ x, y, utility: utilityVal, marginalUtility: marginalVal });
+        }
+      }
+      return data;
+    }
+
+    // Color scale: transitions from red (low) -> yellow (mid) -> green (high)
+    function getColor(value, maxVal) {
+      let mid = maxVal / 2;
+      let r, g;
+      if (value <= mid) {
+        let ratio = value / mid;
+        r = 255;
+        g = Math.round(255 * ratio);
+      } else {
+        let ratio = (value - mid) / (maxVal - mid);
+        r = Math.round(255 * (1 - ratio));
+        g = 255;
+      }
+      return `rgb(${r},${g},0)`;
+    }
+
+    // ------------------------------
+    // p5.js: Setup & Draw Functions
+    // ------------------------------
+    let layer = "utility";  // default layer
+
+    function setup() {
+      let cnv = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
+      cnv.parent("canvas-container");
+
+      // Get tooltip div reference
+      tooltipDiv = document.getElementById("tooltip");
+
+      // Setup radio buttons to switch layers
+      const radios = document.getElementsByName("layer");
+      radios.forEach(radio => {
+        radio.addEventListener("change", () => {
+          layer = radio.value;
+        });
+      });
+
+      // Reset button: restore initial points
+      document.getElementById("resetBtn").addEventListener("click", () => {
+        userPoints = initialPoints.map(pt => ({ ...pt }));
+      });
+    }
+
+    function draw() {
+      background(255);
+      // Compute grid data based on current trees
+      let gridData = buildGridData(userPoints);
+      let maxVal = (layer === "utility")
+                    ? Math.max(...gridData.map(d => d.utility))
+                    : Math.max(...gridData.map(d => d.marginalUtility));
+      if (maxVal === 0) maxVal = 1; // prevent division by zero
+
+      let cellSize = CANVAS_SIZE / (GRID_RESOLUTION - 1);
+      noStroke();
+      // Draw each grid cell
+      gridData.forEach(pt => {
+        let val = (layer === "utility") ? pt.utility : pt.marginalUtility;
+        fill(getColor(val, maxVal));
+        let cx = pt.x * PIXELS_PER_UNIT;
+        let cy = pt.y * PIXELS_PER_UNIT;
+        rect(cx - cellSize / 2, cy - cellSize / 2, cellSize, cellSize);
+      });
+
+      // Draw trees as circles with utility labels
+      stroke(0);
+      fill(0);
+      textAlign(CENTER, BOTTOM);
+      textSize(12);
+      userPoints.forEach(tree => {
+        let cx = tree.x * PIXELS_PER_UNIT;
+        let cy = tree.y * PIXELS_PER_UNIT;
+        fill(0);
+        ellipse(cx, cy, 10, 10);
+        let tUtil = computeTreeUtility(tree, userPoints).toFixed(1);
+        fill(0);
+        text(tUtil, cx, cy - 10);
+      });
+
+      // Update Total Utility display
+      let total = computeTotalUtility(userPoints).toFixed(2);
+      document.getElementById("totalUtility").textContent = total;
+
+      // ------------------------------
+      // Tooltip logic: show info for nearest grid cell
+      // ------------------------------
+      if (mouseX >= 0 && mouseX <= width && mouseY >= 0 && mouseY <= height) {
+        // Compute nearest grid cell indices
+        let i = Math.round(mouseX / cellSize);
+        let j = Math.round(mouseY / cellSize);
+        i = constrain(i, 0, GRID_RESOLUTION - 1);
+        j = constrain(j, 0, GRID_RESOLUTION - 1);
+        let index = i * GRID_RESOLUTION + j;
+        let cell = gridData[index];
+        tooltipDiv.innerHTML = 
+          `x: ${cell.x.toFixed(1)}<br>` +
+          `y: ${cell.y.toFixed(1)}<br>` +
+          `Utility: ${cell.utility.toFixed(1)}<br>` +
+          `Marginal: ${cell.marginalUtility.toFixed(1)}`;
+        // Position tooltip directly relative to the container using mouse coordinates with a 2px offset
+        tooltipDiv.style.left = (mouseX + 2) + "px";
+        tooltipDiv.style.top = (mouseY + 2) + "px";
+        tooltipDiv.style.display = "block";
+      } else {
+        tooltipDiv.style.display = "none";
+      }
+    }
+
+    // ------------------------------
+    // Mouse Interaction: Add Tree on Click
+    // ------------------------------
+    function mousePressed() {
+      if (mouseX >= 0 && mouseX <= width && mouseY >= 0 && mouseY <= height) {
+        let modelX = mouseX / PIXELS_PER_UNIT;
+        let modelY = mouseY / PIXELS_PER_UNIT;
+        userPoints.push({ x: modelX, y: modelY });
+      }
+    }
+  </script>
+</body>
+</html>
